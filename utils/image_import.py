@@ -1,5 +1,4 @@
 import rasterio
-import numpy as np
 
 def read_image(file_path):
     with rasterio.open(file_path) as src:

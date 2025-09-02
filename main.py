@@ -1,22 +1,27 @@
 import numpy as np
 from utils.image_import import read_image, save_image
-from correction.radiometric_correction import method1_sensorcalibration, method2_dark_object_subtraction
+from correction.radiometric_correction import (
+    method1_sensorcalibration,
+    method2_dark_object_subtraction,
+    method3_atmospheric_correction_6s,
+)
 from utils.normalization import normalize_to_12bit_tiled
 from correction.metadata_reader import read_metadata
 from metrics.mean_calculator import MeanCalculator
 from metrics.quality_metrics import QualityMetricsEvaluator
-from visualization import histogram_plotter
+from visualization.histogram_plotter import HistogramPlotter
 
 def main():
     # === Ścieżki wejściowe ===
-    input_image_path = "sciezka/do/zobrazowanie_oryginalne.tif"
-    metadata_csv_path = "sciezka/do/metadane_planetscope.txt"
-    shapefile_path = "sciezka/do/obszar_referencyjny.shp"
+    input_image_path = "C:/Users/kipki/Downloads/la_crau_psscene_analytic_udm2/PSScene/20250831_105805_23_2518_3B_AnalyticMS_clip.tif"
+    metadata_csv_path = "C:/Users/kipki/Downloads/la_crau_psscene_analytic_udm2/PSScene/metadane_planetscope.txt"
+    shapefile_path = "C:/Users/kipki/Desktop/projekty/INŻYNIERKA'25/matlab/Lacrau.shp"
 
     # === Ścieżki wyjściowe ===
     output_image_paths = [
         "P_output_method1_sensorcalibration.tif",
-        "P_output_method2_dark_object_subtraction.tif"
+        "P_output_method2_dark_object_subtraction.tif",
+        "P_output_method3_6s.tif",
     ]
 
     # === Wczytanie obrazu i metadanych ===
@@ -24,24 +29,32 @@ def main():
     radiometric_scale_factors, coeffs, sun_azimuth, sun_elevation = read_metadata(metadata_csv_path)
 
     # === Korekcja radiometryczna ===
-    corrected1 = method1_sensorcalibration(image, radiometric_scale_factors, coeffs)
-    corrected2 = method2_dark_object_subtraction(image, radiometric_scale_factors)
-
-    # === Normalizacja do 12 bit ===
-    normalized_images = [
-        normalize_to_12bit_tiled(corrected1),
-        normalize_to_12bit_tiled(corrected2)
+    corrected_images = [
+        method1_sensorcalibration(image, radiometric_scale_factors, coeffs),
+        method2_dark_object_subtraction(image, radiometric_scale_factors),
     ]
 
+    try:
+        corrected_images.append(
+            method3_atmospheric_correction_6s(
+                image, radiometric_scale_factors, sun_azimuth, sun_elevation
+            )
+        )
+    except ImportError as exc:  # pragma: no cover - optional dependency missing
+        print(f"6S atmospheric correction skipped: {exc}")
+
+    # === Normalizacja do 12 bit ===
+    normalized_images = [normalize_to_12bit_tiled(img) for img in corrected_images]
+
     # === Zapis obrazów ===
-    for output_path, corrected in zip(output_image_paths, [corrected1, corrected2]):
+    for output_path, corrected in zip(output_image_paths, corrected_images):
         save_image(corrected, profile, output_path)
 
     # === Obliczanie średnich wartości w masce SHP ===
     mean_calc = MeanCalculator(shapefile_path)
     target_means_all_images = []
 
-    for image_idx, norm_image in enumerate(normalized_images):
+    for norm_image in normalized_images:
         target_means = []
         for band in range(norm_image.shape[0]):
             mean_val = mean_calc.calculate_mean(norm_image[band], transform)
@@ -75,8 +88,12 @@ def main():
         print(f"{method}: {snrs}")
 
     # === Wizualizacja histogramów ===
-    method_names = ["Kalibracja sensorów", "Korekcja atmosferyczna"]
-    histogram_plotter(image, normalized_images, method_names)
+    method_names = [
+        "Kalibracja sensorów",
+        "Korekcja atmosferyczna (DOS)",
+        "Korekcja atmosferyczna 6S",
+    ][: len(normalized_images)]
+    HistogramPlotter().plot(image, normalized_images, method_names)
 
 if __name__ == "__main__":
     main()
