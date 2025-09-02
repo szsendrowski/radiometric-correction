@@ -5,7 +5,7 @@ from utils.normalization import normalize_to_12bit_tiled
 from correction.metadata_reader import read_metadata
 from metrics.mean_calculator import MeanCalculator
 from metrics.quality_metrics import QualityMetricsEvaluator
-from visualization import histogram_plotter
+from visualization.histogram_plotter import histogram_plotter
 
 def main():
     # === Ścieżki wejściowe ===

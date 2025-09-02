@@ -29,3 +29,22 @@ class HistogramPlotter:
 
         plt.tight_layout()
         plt.show()
+
+
+def histogram_plotter(original_image, corrected_images_list, method_names):
+    """Convenience wrapper for plotting histograms.
+
+    Creates a :class:`HistogramPlotter` instance and calls its
+    :meth:`plot` method with the provided images.
+
+    Parameters
+    ----------
+    original_image : np.ndarray
+        The original image array.
+    corrected_images_list : list[np.ndarray]
+        List of corrected images to compare with the original.
+    method_names : list[str]
+        Names of the correction methods corresponding to the images.
+    """
+    plotter = HistogramPlotter()
+    plotter.plot(original_image, corrected_images_list, method_names)
