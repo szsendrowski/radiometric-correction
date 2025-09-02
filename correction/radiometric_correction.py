@@ -21,6 +21,7 @@ def method3_atmospheric_correction_6s(image, radiometric_scale_factors,
 
     try:  # Import locally so that Py6S is only required when this method runs
         from Py6S import SixS, AtmosProfile, AeroProfile, Geometry, Wavelength
+        from Py6S.sixs_exceptions import OutputParsingError
     except ImportError as exc:  # pragma: no cover - best effort for missing lib
         raise ImportError("Py6S library is required for 6S atmospheric "
                           "correction") from exc
@@ -54,12 +55,24 @@ def method3_atmospheric_correction_6s(image, radiometric_scale_factors,
         # Retrieve model outputs with fallbacks to keep the function robust to
         # Py6S API changes.  These quantities are used in the classic 6S
         # formula to convert radiance at sensor to surface reflectance.
-        L_path = getattr(s.outputs, "atmospheric_intrinsic_radiance", 0)
-        trans_total = getattr(getattr(s.outputs, "transmittance_total_scattering", object()),
-                              "upward", 1)
-        trans_down = getattr(getattr(s.outputs, "transmittance_total_scattering", object()),
-                              "downward", 1)
-        E0 = getattr(s.outputs, "solar_irradiance", 1)
+        # Helper to robustly access Py6S outputs as its __getattr__ raises a
+        # custom exception instead of AttributeError when a field is missing.
+        def _safe_output(name, default):
+            try:
+                return getattr(s.outputs, name)
+            except (AttributeError, OutputParsingError):  # pragma: no cover - best effort
+                return default
+
+        # Retrieve model outputs used in the classic 6S formula.  Fall back to
+        # sensible defaults if Py6S does not provide a particular quantity to
+        # avoid raising an OutputParsingError for older/newer versions.
+        L_path = _safe_output("atmospheric_intrinsic_radiance", 0)
+
+        trans = _safe_output("transmittance_total_scattering", None)
+        trans_total = getattr(trans, "upward", 1) if trans else 1
+        trans_down = getattr(trans, "downward", 1) if trans else 1
+
+        E0 = _safe_output("solar_irradiance", 1)
         mu_s = np.cos(np.radians(90 - sun_elevation))
 
         denom = max(E0 * mu_s * trans_total * trans_down, 1e-6)
