@@ -40,9 +40,9 @@ def method3_atmospheric_correction_6s(image, radiometric_scale_factors,
             AtmosProfile.MidlatitudeSummer)
         s.aero_profile = AeroProfile.PredefinedType(AeroProfile.Continental)
         s.geometry = Geometry.User()
-        s.geometry.solar_z = 90 - sun_elevation  # convert elevation to zenith
+        s.geometry.solar_z = 90 - sun_elevation
         s.geometry.solar_a = sun_azimuth
-        s.geometry.view_z = 0  # assume nadir looking sensor
+        s.geometry.view_z = 0
         s.geometry.view_a = 0
         s.geometry.month = 8
         s.geometry.day = 31
@@ -58,12 +58,9 @@ def method3_atmospheric_correction_6s(image, radiometric_scale_factors,
         def _safe_output(name, default):
             try:
                 return getattr(s.outputs, name)
-            except (AttributeError, OutputParsingError):  # pragma: no cover - best effort
+            except (AttributeError, OutputParsingError):
                 return default
 
-        # Retrieve model outputs used in the classic 6S formula.  Fall back to
-        # sensible defaults if Py6S does not provide a particular quantity to
-        # avoid raising an OutputParsingError for older/newer versions.
         L_path = _safe_output("atmospheric_intrinsic_radiance", 0)
         print("L_path:", L_path)
 
