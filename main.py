@@ -11,6 +11,9 @@ from metrics.mean_calculator import MeanCalculator
 from metrics.quality_metrics import QualityMetricsEvaluator
 from visualization.histogram_plotter import HistogramPlotter
 
+metadata = read_metadata("C:/Users/kipki/Downloads/la_crau_psscene_analytic_udm2/PSScene/metadane_planetscope.txt")
+print(metadata)
+
 def main():
     # === Ścieżki wejściowe ===
     input_image_path = "C:/Users/kipki/Downloads/la_crau_psscene_analytic_udm2/PSScene/20250831_105805_23_2518_3B_AnalyticMS_clip.tif"

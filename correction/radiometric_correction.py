@@ -33,18 +33,19 @@ def method3_atmospheric_correction_6s(image, radiometric_scale_factors,
 
     for band in range(image.shape[0]):
         radiance = image[band] * radiometric_scale_factors[band]
+        print("Radiance min/max:", radiance.min(), radiance.max())
 
         s = SixS()
         s.atmos_profile = AtmosProfile.PredefinedType(
             AtmosProfile.MidlatitudeSummer)
-        s.aero_profile = AeroProfile.PredefinedType(AeroProfile.NoAerosols)
+        s.aero_profile = AeroProfile.PredefinedType(AeroProfile.Continental)
         s.geometry = Geometry.User()
         s.geometry.solar_z = 90 - sun_elevation  # convert elevation to zenith
         s.geometry.solar_a = sun_azimuth
         s.geometry.view_z = 0  # assume nadir looking sensor
         s.geometry.view_a = 0
-        s.geometry.month = 7   # default values; ideally read from metadata
-        s.geometry.day = 1
+        s.geometry.month = 8
+        s.geometry.day = 31
 
         wavelength = (central_wavelengths[band] if band < len(central_wavelengths)
                        else central_wavelengths[-1])
@@ -52,11 +53,8 @@ def method3_atmospheric_correction_6s(image, radiometric_scale_factors,
 
         s.run()
 
-        # Retrieve model outputs with fallbacks to keep the function robust to
-        # Py6S API changes.  These quantities are used in the classic 6S
-        # formula to convert radiance at sensor to surface reflectance.
-        # Helper to robustly access Py6S outputs as its __getattr__ raises a
-        # custom exception instead of AttributeError when a field is missing.
+        print("Available outputs:", dir(s.outputs))
+
         def _safe_output(name, default):
             try:
                 return getattr(s.outputs, name)
@@ -67,15 +65,42 @@ def method3_atmospheric_correction_6s(image, radiometric_scale_factors,
         # sensible defaults if Py6S does not provide a particular quantity to
         # avoid raising an OutputParsingError for older/newer versions.
         L_path = _safe_output("atmospheric_intrinsic_radiance", 0)
+        print("L_path:", L_path)
 
         trans = _safe_output("transmittance_total_scattering", None)
-        trans_total = getattr(trans, "upward", 1) if trans else 1
-        trans_down = getattr(trans, "downward", 1) if trans else 1
+        if trans is None:
+            trans = _safe_output("transmittance_total", None)
 
-        E0 = _safe_output("solar_irradiance", 1)
+        if trans is not None:
+            trans_total = getattr(trans, "upward", 1.0)
+            trans_down = getattr(trans, "downward", 1.0)
+        else:
+            trans_total, trans_down = 1.0, 1.0
+        print("Trans total:", trans_total)
+        print("Trans down:", trans_down)
+
+        if hasattr(s.outputs, "solar_spectrum"):
+            spectrum = s.outputs.solar_spectrum
+            if isinstance(spectrum, dict):
+                # wersja Py6S, w której spectrum jest słownikiem {λ: wartość}
+                closest_wl = min(spectrum.keys(), key=lambda k: abs(k - wavelength))
+                E0 = spectrum[closest_wl]
+                print(f"E0 at {wavelength} µm (closest {closest_wl}):", E0)
+            elif isinstance(spectrum, (float, int)):
+                # wersja Py6S, w której spectrum to już pojedyncza liczba
+                E0 = spectrum
+                print(f"E0 at {wavelength} µm (direct):", E0)
+            else:
+                # fallback
+                E0 = 1800.0
+                print(f"E0 fallback:", E0)
+        else:
+            E0 = 1800.0
+            print(f"E0 fallback:", E0)
+
         mu_s = np.cos(np.radians(90 - sun_elevation))
-
         denom = max(E0 * mu_s * trans_total * trans_down, 1e-6)
+
         corrected_image[band] = np.pi * (radiance - L_path) / denom
 
     return corrected_image
